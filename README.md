@@ -63,6 +63,33 @@ senviok.whatsapp.send(to="+2348012345678", from_="Senviok", text="Hello!")
 - `cc`, `bcc`, `reply_to`
 - `template_id`, `template_data`
 - `add_unsubscribe_footer`, `add_list_unsubscribe_header`
+- `attachments` (`EmailAttachment` values) and `attachment_ids` (IDs from the upload endpoint)
+
+Pass file bytes as ``content``; the SDK base64-encodes them for the API. Set exactly one of ``content`` or ``path``:
+
+```python
+from senviok import EmailAttachment
+
+senviok.emails.send(
+    from_="billing@example.com", to="customer@example.com",
+    subject="Your invoice", text="Your invoice is attached.",
+    attachments=[EmailAttachment(
+        filename="invoice.pdf", content=open("invoice.pdf", "rb").read(),
+        content_type="application/pdf",
+    )],
+)
+```
+
+For larger files, upload with multipart field ``file`` to ``POST /v1/emails/attachments`` and pass the returned IDs as ``attachment_ids=[...]``. The API allows up to 10 files and 10 MB total per email.
+
+```python
+with open("invoice.pdf", "rb") as invoice:
+    uploaded = senviok.emails.upload_attachment(invoice, content_type="application/pdf")
+senviok.emails.send(
+    from_="billing@example.com", to="customer@example.com",
+    subject="Your invoice", attachment_ids=[uploaded.id],
+)
+```
 
 Unknown options raise `TypeError` immediately — no silent typos.
 

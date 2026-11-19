@@ -8,6 +8,7 @@ snake_case field names.
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, fields
 from typing import Any, Dict, List, Optional, Union
 
@@ -28,6 +29,10 @@ class _RequestMixin:
             value = getattr(self, field_.name)
             if value is None:
                 continue
+            if isinstance(value, _RequestMixin):
+                value = value.to_dict()
+            elif isinstance(value, list):
+                value = [item.to_dict() if isinstance(item, _RequestMixin) else item for item in value]
             mapping[to_camel(field_.name)] = value
         return mapping
 
@@ -35,6 +40,25 @@ class _RequestMixin:
 # ---------------------------------------------------------------------------
 # Requests
 # ---------------------------------------------------------------------------
+
+
+@dataclass
+class EmailAttachment(_RequestMixin):
+    """An outgoing file. Provide exactly one of ``content`` or ``path``."""
+
+    filename: str
+    content: Optional[Union[str, bytes]] = None
+    content_type: Optional[str] = None
+    path: Optional[str] = None
+    content_id: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        if bool(self.content) == bool(self.path):
+            raise ValueError("Provide exactly one of attachment content or path")
+        values = super().to_dict()
+        if isinstance(self.content, bytes):
+            values["content"] = base64.b64encode(self.content).decode("ascii")
+        return values
 
 
 @dataclass
@@ -54,6 +78,8 @@ class EmailOptions(_RequestMixin):
     template_data: Optional[Dict[str, str]] = None
     add_unsubscribe_footer: Optional[bool] = None
     add_list_unsubscribe_header: Optional[bool] = None
+    attachments: Optional[List[EmailAttachment]] = None
+    attachment_ids: Optional[List[str]] = None
 
 
 @dataclass
@@ -123,6 +149,15 @@ class _Model(BaseModel):
 
 class EmailResponse(_Model):
     id: str
+
+
+class UploadedEmailAttachment(_Model):
+    id: str
+    filename: str
+    content_type: str
+    size_bytes: int
+    bucket: Optional[str] = None
+    key: Optional[str] = None
 
 
 class SmsResponse(_Model):

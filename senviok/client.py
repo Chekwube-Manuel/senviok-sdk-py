@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, BinaryIO, Dict, List, Optional, Union
 
 import httpx
 
@@ -38,6 +38,7 @@ from .models import (
     Suppression,
     Template,
     UpdateTemplateRequest,
+    UploadedEmailAttachment,
     VerifyDomainResponse,
     Webhook,
     WebhookDelivery,
@@ -122,6 +123,22 @@ class _EmailsResource:
         payload = EmailOptions(**kwargs).to_dict()
         data = self._client._request("POST", "/emails", json=payload)
         return EmailResponse.model_validate(data)
+
+    def upload_attachment(
+        self, file: Union[bytes, BinaryIO], filename: Optional[str] = None,
+        content_type: str = "application/octet-stream",
+    ) -> UploadedEmailAttachment:
+        """Upload a file for a later send using ``attachment_ids``."""
+        if isinstance(file, bytes) and not filename:
+            raise ValueError("filename is required when uploading bytes")
+        name = filename or getattr(file, "name", None)
+        if not name:
+            raise ValueError("filename is required for the uploaded file")
+        data = self._client._request(
+            "POST", "/emails/attachments",
+            files={"file": (name, file, content_type)},
+        )
+        return UploadedEmailAttachment.model_validate(data)
 
 
 class _SmsResource:
@@ -398,6 +415,22 @@ class _AsyncEmailsResource:
         payload = EmailOptions(**kwargs).to_dict()
         data = await self._client._request("POST", "/emails", json=payload)
         return EmailResponse.model_validate(data)
+
+    async def upload_attachment(
+        self, file: Union[bytes, BinaryIO], filename: Optional[str] = None,
+        content_type: str = "application/octet-stream",
+    ) -> UploadedEmailAttachment:
+        """Upload a file for a later send using ``attachment_ids``."""
+        if isinstance(file, bytes) and not filename:
+            raise ValueError("filename is required when uploading bytes")
+        name = filename or getattr(file, "name", None)
+        if not name:
+            raise ValueError("filename is required for the uploaded file")
+        data = await self._client._request(
+            "POST", "/emails/attachments",
+            files={"file": (name, file, content_type)},
+        )
+        return UploadedEmailAttachment.model_validate(data)
 
 
 class _AsyncSmsResource:

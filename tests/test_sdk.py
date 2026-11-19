@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
 
 import httpx
 import pytest
@@ -49,6 +50,29 @@ def test_send_email_builds_correct_request(senviok: Senviok) -> None:
 def test_send_email_unknown_option_raises_type_error(senviok: Senviok) -> None:
     with pytest.raises(TypeError):
         senviok.emails.send(bogus_option="nope")  # type: ignore[call-arg]
+
+
+@respx.mock
+def test_upload_then_send_attachment(senviok: Senviok) -> None:
+    upload = respx.post(f"{BASE}/v1/emails/attachments").mock(return_value=httpx.Response(200, json={
+        "id": "att_123", "filename": "invoice.pdf", "contentType": "application/pdf",
+        "sizeBytes": 3, "bucket": "test", "key": "test/att_123",
+    }))
+    send = respx.post(f"{BASE}/v1/emails").mock(return_value=httpx.Response(200, json={"id": "msg_123"}))
+
+    uploaded = senviok.emails.upload_attachment(BytesIO(b"pdf"), "invoice.pdf", "application/pdf")
+    result = senviok.emails.send(
+        from_="billing@example.com", to="customer@example.com", subject="Invoice",
+        attachment_ids=[uploaded.id],
+    )
+
+    assert result.id == "msg_123"
+    upload_request = upload.calls.last.request
+    assert upload_request.headers["Authorization"] == f"Bearer {API_KEY}"
+    assert upload_request.headers["Content-Type"].startswith("multipart/form-data; boundary=")
+    assert b'filename="invoice.pdf"' in upload_request.content
+    assert b"pdf" in upload_request.content
+    assert json.loads(send.calls.last.request.content)["attachmentIds"] == ["att_123"]
 
 
 @respx.mock
